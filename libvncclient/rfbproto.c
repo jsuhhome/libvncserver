@@ -37,7 +37,6 @@
 #include <errno.h>
 #include <rfb/rfbclient.h>
 #ifdef WIN32
-#undef SOCKET
 #undef socklen_t
 #endif
 #ifdef LIBVNCSERVER_HAVE_LIBZ
@@ -320,7 +319,7 @@ ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
       fclose(rec->file);
       return FALSE;
     }
-    client->sock = -1;
+    client->sock = RFB_INVALID_SOCKET;
     return TRUE;
   }
 
@@ -333,7 +332,7 @@ ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
   {
 #ifdef LIBVNCSERVER_IPv6
     client->sock = ConnectClientToTcpAddr6(hostname, port);
-    if (client->sock == -1)
+    if (client->sock == RFB_INVALID_SOCKET)
 #endif
     {
       unsigned int host;
@@ -347,7 +346,7 @@ ConnectToRFBServer(rfbClient* client,const char *hostname, int port)
     }
   }
 
-  if (client->sock < 0) {
+  if (client->sock == RFB_INVALID_SOCKET) {
     rfbClientLog("Unable to connect to VNC server\n");
     return FALSE;
   }
@@ -367,7 +366,6 @@ rfbBool ConnectToRFBRepeater(rfbClient* client,const char *repeaterHost, int rep
   rfbProtocolVersionMsg pv;
   int major,minor;
   char tmphost[250];
-  int tmphostlen;
 
 #ifdef LIBVNCSERVER_IPv6
   client->sock = ConnectClientToTcpAddr6(repeaterHost, repeaterPort);
@@ -383,7 +381,7 @@ rfbBool ConnectToRFBRepeater(rfbClient* client,const char *repeaterHost, int rep
     client->sock = ConnectClientToTcpAddr(host, repeaterPort);
   }
 
-  if (client->sock < 0) {
+  if (client->sock == RFB_INVALID_SOCKET) {
     rfbClientLog("Unable to connect to VNC repeater\n");
     return FALSE;
   }
@@ -403,11 +401,10 @@ rfbBool ConnectToRFBRepeater(rfbClient* client,const char *repeaterHost, int rep
 
   rfbClientLog("Connected to VNC repeater, using protocol version %d.%d\n", major, minor);
 
-  tmphostlen = snprintf(tmphost, sizeof(tmphost), "%s:%d", destHost, destPort);
-  if(tmphostlen < 0 || tmphostlen >= (int)sizeof(tmphost))
-    return FALSE; /* snprintf error or output truncated */
-
-  if (!WriteToRFBServer(client, tmphost, tmphostlen + 1))
+  memset(tmphost, 0, sizeof(tmphost));
+  if(snprintf(tmphost, sizeof(tmphost), "%s:%d", destHost, destPort) >= (int)sizeof(tmphost))
+    return FALSE; /* output truncated */
+  if (!WriteToRFBServer(client, tmphost, sizeof(tmphost)))
     return FALSE;
 
   return TRUE;
